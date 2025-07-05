@@ -1,0 +1,2 @@
+CREATE DATABASE brev-ly-test;
+CREATE DATABASE brev-ly;
