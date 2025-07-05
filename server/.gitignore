@@ -1,0 +1,8 @@
+.idea
+.vscode
+.junie
+.DS_Store
+node_modules
+.env
+.env.testing
+dist
