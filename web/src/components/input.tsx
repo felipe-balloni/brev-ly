@@ -1,6 +1,6 @@
 import {WarningIcon} from '@phosphor-icons/react';
 import React, {type ComponentProps} from 'react';
-import { tv } from 'tailwind-variants';
+import {tv} from 'tailwind-variants';
 
 const labelVariants = tv({
     base: 'text-xs text-gray-500 uppercase focus:font-bold transition-all duration-150',
@@ -34,10 +34,10 @@ const inputVariants = tv({
 });
 
 export type InputProps = Omit<ComponentProps<'input'>, 'prefix'> & {
-  id: string;
-  label: string;
-  error?: string;
-  prefix?: string;
+    id: string;
+    label: string;
+    error?: string;
+    prefix?: string;
 };
 
 export const Input: React.FC<InputProps> = ({
@@ -50,17 +50,17 @@ export const Input: React.FC<InputProps> = ({
     const intent = error && error.trim() ? 'error' : 'default';
 
     return (
-        <div className="group relative w-full flex flex-col gap-2">
+        <div className="relative flex w-full flex-col gap-2 group">
             <label
                 htmlFor={id}
-                className={labelVariants({ intent })}
+                className={labelVariants({intent})}
             >
                 {label}
             </label>
 
-            <div className={inputContainerVariants({ intent })}>
+            <div className={inputContainerVariants({intent})}>
                 {prefix && (
-                    <span className="pl-2.5 text-gray-500 text-md font-normal select-none -mr-1.5">
+                    <span className="select-none font-normal text-gray-400 pl-2.5 text-md -mr-1.5">
                         {prefix}
                     </span>
                 )}
@@ -74,9 +74,9 @@ export const Input: React.FC<InputProps> = ({
             </div>
 
             {error && (
-                <div className="flex flex-row items-center gap-2 mt-1">
-                    <WarningIcon className="text-danger" size={16} />
-                    <span id={`${id}-error`} className="text-xs text-danger font-bold">{error}</span>
+                <div className="mt-1 flex flex-row items-center gap-2">
+                    <WarningIcon className="text-danger" size={14}/>
+                    <span id={`${id}-error`} className="text-sm">{error}</span>
                 </div>
             )}
         </div>
