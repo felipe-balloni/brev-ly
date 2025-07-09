@@ -1,3 +1,4 @@
+import fastifyCors from '@fastify/cors';
 import { fastifySwagger } from '@fastify/swagger';
 import { fastifySwaggerUi } from '@fastify/swagger-ui';
 import { fastify } from 'fastify';
@@ -11,6 +12,10 @@ import { env } from '@/env/index.js';
 import { linksController } from '@/http/controllers/links/controller.js';
 
 export const app = fastify();
+
+await app.register(fastifyCors, {
+    origin: '*',
+});
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
