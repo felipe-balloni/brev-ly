@@ -3,6 +3,7 @@ import { fastifySwagger } from '@fastify/swagger';
 import { fastifySwaggerUi } from '@fastify/swagger-ui';
 import { fastify } from 'fastify';
 import {
+    hasZodFastifySchemaValidationErrors,
     jsonSchemaTransform,
     serializerCompiler,
     validatorCompiler,
@@ -21,18 +22,13 @@ app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
 
 app.setErrorHandler((error, _request, reply) => {
-    if (error instanceof ZodError) {
-        return reply.status(422).send({
-            message: 'Validation error',
-            issues: error.format(),
-        });
+    if (hasZodFastifySchemaValidationErrors(error)) {
+        return reply
+            .status(422)
+            .send({ message: 'Validation error', issues: error.validation });
     }
 
-    if (env.NODE_ENV !== 'production') {
-        app.log.error(error);
-    } else {
-        // TODO: Here we should log to an external tool like Sentry/DataDog/Grafana...
-    }
+    console.log(error);
 
     return reply.status(500).send({ message: 'Internal server error.' });
 });

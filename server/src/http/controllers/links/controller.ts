@@ -8,16 +8,14 @@ const createLinkBodySchema = z
     .object({
         originalUrl: z
             .string()
-            .url()
+            .url('Invalid URL format, must start with https ou http.')
             .describe('The original URL to be shortened.'),
         shortenedUrl: z
             .string()
-            .min(3)
-            .max(10)
-            .regex(/^[a-zA-Z0-9-_]+$/)
-            .describe(
-                'Custom shortened URL (optional). If not provided, it will be generated automatically.',
-            ),
+            .min(3, 'Shortened URL must be at least 3 characters long.')
+            .max(10, 'Shortened URL must be at most 10 characters long.')
+            .regex(/^[a-zA-Z0-9-_]+$/, 'Invalid characters in shortened URL.')
+            .describe('Custom shortened URL.'),
     })
     .describe('Payload for creating a new shortened link.');
 
@@ -25,14 +23,14 @@ const updateLinkBodySchema = z
     .object({
         originalUrl: z
             .string()
-            .url()
+            .url('Invalid URL format, must start with https ou http.')
             .optional()
             .describe('The new original URL.'),
         shortenedUrl: z
             .string()
-            .min(3)
-            .max(10)
-            .regex(/^[a-zA-Z0-9-_]+$/)
+            .min(3, 'Shortened URL must be at least 3 characters long.')
+            .max(10, 'Shortened URL must be at most 10 characters long.')
+            .regex(/^[a-zA-Z0-9-_]+$/, 'Invalid characters in shortened URL.')
             .optional()
             .describe('The new shortened URL.'),
     })
@@ -48,7 +46,7 @@ const updateLinkBodySchema = z
 const linkResponseSchema = z
     .object({
         id: z.string().describe('Unique identifier for the link.'),
-        originalUrl: z.string().url().describe('The original registered URL.'),
+        originalUrl: z.string().describe('The original registered URL.'),
         shortenedUrl: z
             .string()
             .describe('The generated or provided shortened URL.'),
@@ -64,6 +62,102 @@ const linkResponseSchema = z
 export async function linksController(app: FastifyInstance) {
     const service = new LinkService(new DrizzleLinkRepository());
 
+    // List all links
+    app.get<{ Querystring: { limit?: number; cursor?: string } }>(
+        '/links',
+        {
+            schema: {
+                summary: 'List all shortened URLs',
+                description:
+                    'Returns a paginated list of all shortened URLs with support for infinite scrolling',
+                tags: ['URLs'],
+                querystring: z.object({
+                    limit: z.coerce
+                        .number()
+                        .optional()
+                        .describe('Number of links to return (default: 20)'),
+                    cursor: z
+                        .string()
+                        .optional()
+                        .describe(
+                            'Cursor for pagination (ID of the last link from previous page)',
+                        ),
+                }),
+                response: {
+                    200: z.object({
+                        links: z
+                            .array(linkResponseSchema)
+                            .describe('List of shortened links'),
+                        nextCursor: z
+                            .string()
+                            .optional()
+                            .describe('Cursor for the next page of results'),
+                    }),
+                },
+            },
+        },
+        async (request, reply) => {
+            const { limit, cursor } = request.query;
+            const links = await service.listLinks(limit, cursor);
+
+            return reply.status(200).send(links);
+        },
+    );
+
+    // Get link by shortened URL
+    app.get<{ Params: { shortenedUrl: string } }>(
+        '/links/:shortenedUrl',
+        {
+            schema: {
+                summary: 'Get the original URL by shortened URL',
+                description:
+                    'Retrieves the original URL associated with a shortened URL path',
+                tags: ['URLs'],
+                params: z.object({
+                    shortenedUrl: z
+                        .string()
+                        .describe('The shortened URL path to look up'),
+                }),
+                response: {
+                    200: z
+                        .object({
+                            originalUrl: z
+                                .string()
+                                .url()
+                                .describe(
+                                    'The original URL that the shortened URL redirects to',
+                                ),
+                        })
+                        .describe('Successful response with the original URL'),
+                    404: z
+                        .object({
+                            message: z
+                                .string()
+                                .describe(
+                                    'Error message indicating that the link was not found',
+                                ),
+                        })
+                        .describe(
+                            'Error when the specified shortened URL does not exist',
+                        ),
+                },
+            },
+        },
+        async (request, reply) => {
+            const { shortenedUrl } = request.params;
+            const result = await service.getOriginalUrl(shortenedUrl);
+
+            if (!isRight(result)) {
+                return reply.status(404).send({ message: 'Link not found' });
+            }
+
+            return reply
+                .status(200)
+                .send({ originalUrl: unwrapEither(result) });
+        },
+    );
+
+    // Create a new link
     app.post(
         '/links',
         {
@@ -139,141 +233,7 @@ export async function linksController(app: FastifyInstance) {
         },
     );
 
-    app.delete<{ Params: { shortenedUrl: string } }>(
-        '/links/:shortenedUrl',
-        {
-            schema: {
-                summary: 'Delete a shortened URL',
-                description:
-                    'Permanently removes a shortened URL from the system',
-                tags: ['URLs'],
-                params: z.object({
-                    shortenedUrl: z
-                        .string()
-                        .describe('The shortened URL path to delete'),
-                }),
-                response: {
-                    204: z.null().describe('Successful deletion (no content)'),
-                    404: z
-                        .object({
-                            message: z
-                                .string()
-                                .describe(
-                                    'Error message indicating that the link was not found',
-                                ),
-                        })
-                        .describe(
-                            'Error when the specified shortened URL does not exist',
-                        ),
-                },
-            },
-        },
-        async (request, reply) => {
-            const { shortenedUrl } = request.params;
-
-            const result = await service.deleteLink(shortenedUrl);
-
-            if (isLeft(result)) {
-                return reply.status(404).send({ message: 'Link not found' });
-            }
-
-            return reply.status(204).send();
-        },
-    );
-
-    app.get<{ Params: { shortenedUrl: string } }>(
-        '/links/:shortenedUrl',
-        {
-            schema: {
-                summary: 'Get the original URL by shortened URL',
-                description:
-                    'Retrieves the original URL associated with a shortened URL path',
-                tags: ['URLs'],
-                params: z.object({
-                    shortenedUrl: z
-                        .string()
-                        .describe('The shortened URL path to look up'),
-                }),
-                response: {
-                    200: z
-                        .object({
-                            originalUrl: z
-                                .string()
-                                .url()
-                                .describe(
-                                    'The original URL that the shortened URL redirects to',
-                                ),
-                        })
-                        .describe('Successful response with the original URL'),
-                    404: z
-                        .object({
-                            message: z
-                                .string()
-                                .describe(
-                                    'Error message indicating that the link was not found',
-                                ),
-                        })
-                        .describe(
-                            'Error when the specified shortened URL does not exist',
-                        ),
-                },
-            },
-        },
-        async (request, reply) => {
-            const { shortenedUrl } = request.params;
-            const result = await service.getOriginalUrl(shortenedUrl);
-
-            if (!isRight(result)) {
-                return reply.status(404).send({ message: 'Link not found' });
-            }
-
-            return reply
-                .status(200)
-                .send({ originalUrl: unwrapEither(result) });
-        },
-    );
-
-    app.get<{ Querystring: { limit?: number; cursor?: string } }>(
-        '/links',
-        {
-            schema: {
-                summary: 'List all shortened URLs',
-                description:
-                    'Returns a paginated list of all shortened URLs with support for infinite scrolling',
-                tags: ['URLs'],
-                querystring: z.object({
-                    limit: z.coerce
-                        .number()
-                        .optional()
-                        .describe('Number of links to return (default: 20)'),
-                    cursor: z
-                        .string()
-                        .optional()
-                        .describe(
-                            'Cursor for pagination (ID of the last link from previous page)',
-                        ),
-                }),
-                response: {
-                    200: z.object({
-                        links: z
-                            .array(linkResponseSchema)
-                            .describe('List of shortened links'),
-                        nextCursor: z
-                            .string()
-                            .optional()
-                            .describe('Cursor for the next page of results'),
-                    }),
-                },
-            },
-        },
-        async (request, reply) => {
-            const { limit, cursor } = request.query;
-            const links = await service.listLinks(limit, cursor);
-
-            return reply.status(200).send(links);
-        },
-    );
-
+    // Update a link
     app.patch<{
         Params: { shortenedUrl: string };
         Body: { originalUrl?: string; shortenedUrl?: string };
@@ -380,6 +340,50 @@ export async function linksController(app: FastifyInstance) {
         },
     );
 
+    // Delete link
+    app.delete<{ Params: { shortenedUrl: string } }>(
+        '/links/:shortenedUrl',
+        {
+            schema: {
+                summary: 'Delete a shortened URL',
+                description:
+                    'Permanently removes a shortened URL from the system',
+                tags: ['URLs'],
+                params: z.object({
+                    shortenedUrl: z
+                        .string()
+                        .describe('The shortened URL path to delete'),
+                }),
+                response: {
+                    204: z.null().describe('Successful deletion (no content)'),
+                    404: z
+                        .object({
+                            message: z
+                                .string()
+                                .describe(
+                                    'Error message indicating that the link was not found',
+                                ),
+                        })
+                        .describe(
+                            'Error when the specified shortened URL does not exist',
+                        ),
+                },
+            },
+        },
+        async (request, reply) => {
+            const { shortenedUrl } = request.params;
+
+            const result = await service.deleteLink(shortenedUrl);
+
+            if (isLeft(result)) {
+                return reply.status(404).send({ message: 'Link not found' });
+            }
+
+            return reply.status(204).send();
+        },
+    );
+
+    // Increment access count
     app.patch<{ Params: { shortenedUrl: string } }>(
         '/links/:shortenedUrl/access',
         {
