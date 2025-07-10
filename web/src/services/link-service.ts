@@ -13,4 +13,18 @@ export class LinkService {
     static async createLink(payload: NewLinkPayload) {
         return api.post('/links', payload);
     }
+
+    static async getLinks(limit = 20, cursor?: string) {
+        let url = `/links?limit=${limit}`;
+        if (cursor) url += `&cursor=${cursor}`;
+        return api.get(url);
+    }
+
+    static async deleteLink(shortenedUrl: string) {
+        return api.delete(`/links/${shortenedUrl}`);
+    }
+
+    static async exportCsv() {
+        return api.get('/links/export');
+    }
 }
