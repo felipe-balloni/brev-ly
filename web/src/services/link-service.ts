@@ -27,4 +27,8 @@ export class LinkService {
     static async exportCsv() {
         return api.get('/links/export');
     }
+
+    static async accessOriginalLink(shortenedUrl: string) {
+        return api.patch(`/links/${shortenedUrl}/access`);
+    }
 }
