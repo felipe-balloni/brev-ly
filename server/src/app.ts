@@ -16,6 +16,7 @@ export const app = fastify();
 
 await app.register(fastifyCors, {
     origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
 });
 
 app.setValidatorCompiler(validatorCompiler);
